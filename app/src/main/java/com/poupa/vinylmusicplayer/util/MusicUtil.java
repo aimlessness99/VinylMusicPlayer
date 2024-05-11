@@ -10,6 +10,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION_CODES;
+import android.os.Environment;
 import android.provider.BaseColumns;
 import android.provider.MediaStore;
 import android.text.TextUtils;
@@ -121,6 +122,20 @@ public class MusicUtil {
                 MultiValuesTagUtil.infoStringAsArtists(song.artistNames),
                 Album.getTitle(song.albumName)
         );
+    }
+
+    @NonNull
+    public static String getSongFileString(@NonNull final Song song) {
+        // final String r = String.valueOf(Environment.getExternalStorageDirectory());
+        final String r = String.valueOf(Environment.getExternalStoragePublicDirectory("/"));
+        final String out = song.data.replace(r, "");
+        return buildInfoString(out);
+    }
+
+    @NonNull
+    public static String getSongFullInfoString(@NonNull final Song song) {
+        String[] values = {getSongInfoString(song), song.data};
+        return buildInfoString("\n", values, null);
     }
 
     @NonNull

@@ -8,7 +8,9 @@ import static com.poupa.vinylmusicplayer.service.MusicService.TOGGLE_SHUFFLE;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.v4.media.RatingCompat;
 import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -157,6 +159,18 @@ public final class MediaSessionCallback extends MediaSessionCompat.Callback {
         return MediaButtonIntentReceiver.handleIntent(musicService, mediaButtonEvent);
     }
 
+    public static String bundle2string(Bundle bundle) {
+        if (bundle == null) {
+            return null;
+        }
+        String string = "Bundle{";
+        for (String key : bundle.keySet()) {
+            string += " " + key + " => " + bundle.get(key) + ";";
+        }
+        string += " }Bundle";
+        return string;
+    }
+
     @Override
     public void onCustomAction(@NonNull String action, Bundle extras) {
         switch (action) {
@@ -174,10 +188,35 @@ public final class MediaSessionCallback extends MediaSessionCompat.Callback {
                 MusicUtil.toggleFavorite(musicService, musicService.getCurrentSong());
                 musicService.updateMediaSessionPlaybackState();
                 break;
-
+            // case "com.android.mediacenter.action.REPEAT_MODE":
+            //    break;
             default:
-                Log.d(TAG, "Unsupported action: " + action);
+                Log.d(TAG, "Unsupported action: " + action + ", extras:" + bundle2string(extras));
+                // super.onCustomAction(action,extras);
                 break;
         }
     }
+
+    @Override
+    public void onSetRepeatMode(int repeatMode) {
+        super.onSetRepeatMode(repeatMode);
+        Log.e(TAG, "[DVD] onSetShuffleMode: " + repeatMode);
+        musicService.setRepeatModeFromMediaSession(repeatMode);
+        musicService.updateMediaSessionPlaybackState();
+    }
+
+    @Override
+    public void onSetShuffleMode(int shuffleMode) {
+        super.onSetShuffleMode(shuffleMode);
+        Log.e(TAG, "[DVD] onSetShuffleMode: " + shuffleMode);
+        musicService.setShuffleModeFromMediaSession(shuffleMode);
+        musicService.updateMediaSessionPlaybackState();
+    }
+/*
+    @Override
+    public void onSetRating(RatingCompat rating) {
+        super.onSetRating(rating);
+        Log.e(TAG, "[DVD] onSetRating: " + rating);
+    }
+*/
 }

@@ -1,6 +1,10 @@
 buildscript {
     ext.kotlin_version = '1.8.22'
     repositories {
+        // maven{ url 'https://maven.aliyun.com/repository/google'}
+        // maven{ url 'https://maven.aliyun.com/repository/gradle-plugin'}
+        // maven{ url 'https://maven.aliyun.com/repository/public'}
+        // maven{ url 'https://maven.aliyun.com/repository/jcenter'}
         mavenCentral()
         google()
         maven {
@@ -8,7 +12,7 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.4'
+        classpath 'com.android.tools.build:gradle:8.3.1'
         classpath 'com.cmgapps:gradle-licenses-plugin:4.7.0' // For dependencies license report
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
@@ -16,6 +20,10 @@ buildscript {
 
 allprojects {
     repositories {
+        // maven{ url 'https://maven.aliyun.com/repository/google'}
+        // maven{ url 'https://maven.aliyun.com/repository/gradle-plugin'}
+        // maven{ url 'https://maven.aliyun.com/repository/public'}
+        // maven{ url 'https://maven.aliyun.com/repository/jcenter'}
         mavenCentral()
         google()
         maven { url 'https://jitpack.io' }

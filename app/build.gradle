@@ -83,8 +83,11 @@ android {
         ci {
             dimension 'default'
 
-            final String gitBranch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
-            final String gitSha1 = 'git rev-parse --short HEAD'.execute().text.trim()
+            // final String gitBranch = 'git rev-parse --abbrev-ref HEAD'.execute().text.trim()
+            // final String gitSha1 = 'git rev-parse --short HEAD'.execute().text.trim()
+            final String gitBranch = 'dev'
+            final String gitSha1 = 'abcdef'
+
             final String buildTime = new Date().format('yyMMdd-HHmm')
             final String buildId = gitBranch + '_' + gitSha1 + '_' + buildTime
 
@@ -183,6 +186,8 @@ dependencies {
     implementation 'com.github.VinylMusicPlayer:jaudiotagger:v3.0.1o'
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+    // implementation 'com.github.silencedut:taskscheduler:latest'
 
     testImplementation 'junit:junit:4.12'
 

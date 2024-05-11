@@ -24,7 +24,7 @@
 
         <com.kabouzeid.appthemehelper.common.prefs.supportv7.ATESwitchPreference
             app:iconSpaceReserved="false"
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="whitelist_enabled"
             android:summary="@string/pref_summary_whitelist"
             android:title="@string/whitelist" />

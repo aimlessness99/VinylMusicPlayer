@@ -245,7 +245,7 @@ public final class PreferenceUtil {
     }
 
     public NowPlayingScreen getNowPlayingScreen() {
-        final int id = mPreferences.getInt(NOW_PLAYING_SCREEN_ID, 0);
+        final int id = mPreferences.getInt(NOW_PLAYING_SCREEN_ID, 1);
         for (final NowPlayingScreen nowPlayingScreen : NowPlayingScreen.values()) {
             if (nowPlayingScreen.id == id) {return nowPlayingScreen;}
         }
@@ -691,7 +691,7 @@ public final class PreferenceUtil {
     }
 
     public boolean getWhitelistEnabled() {
-        return mPreferences.getBoolean(WHITELIST_ENABLED, false);
+        return mPreferences.getBoolean(WHITELIST_ENABLED, true);
     }
 
     public void setLibraryCategoryInfos(final ArrayList<CategoryInfo> categories) {
@@ -839,7 +839,7 @@ public final class PreferenceUtil {
     }
 
     public int getEnqueueSongsDefaultChoice() {
-        return mPreferences.getInt(ENQUEUE_SONGS_DEFAULT_CHOICE, ENQUEUE_SONGS_CHOICE_REPLACE);
+        return mPreferences.getInt(ENQUEUE_SONGS_DEFAULT_CHOICE, ENQUEUE_SONGS_CHOICE_ASK);
     }
 
     public void setEnqueueSongsDefaultChoice(int choice) {

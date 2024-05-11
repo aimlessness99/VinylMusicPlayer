@@ -1,0 +1,1 @@
+package:com.poupa.vinylmusicplayer -message~:^isPlaying -message~:^measureHierarchy

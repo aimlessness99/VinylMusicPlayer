@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.media.audiofx.AudioEffect;
 import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -48,6 +50,8 @@ import com.poupa.vinylmusicplayer.util.ImageUtil;
 import com.poupa.vinylmusicplayer.util.MusicUtil;
 import com.poupa.vinylmusicplayer.util.NavigationUtil;
 import com.sothree.slidinguppanel.SlidingUpPanelLayout;
+
+import java.util.concurrent.ExecutorService;
 
 public abstract class AbsPlayerFragment
         extends AbsMusicServiceFragment
@@ -284,6 +288,8 @@ public abstract class AbsPlayerFragment
     private Lyrics lyrics;
     private AsyncTask<Void, Void, Lyrics> updateLyricsAsyncTask;
     private AsyncTask<Song, Void, Boolean> updateIsFavoriteTask;
+    // private ExecutorService updateIsFavoriteExecutor;
+
 
     private void toggleFavorite(Song song) {
         MusicUtil.toggleFavorite(requireActivity(), song);
@@ -297,6 +303,25 @@ public abstract class AbsPlayerFragment
     }
 
     protected void updateIsFavorite() {
+        Song song = MusicPlayerRemote.getCurrentSong();
+        Activity activity = getActivity();
+        if (activity == null || song == null || song.id == Song.EMPTY_SONG.id) {
+            return;
+        }
+        Handler workThread = new Handler();
+        workThread.post(() -> {
+            Boolean isFavorite = MusicUtil.isFavorite(getActivity(), song);
+            int res = isFavorite ? R.drawable.ic_favorite_white_24dp : R.drawable.ic_favorite_border_white_24dp;
+            int color = ToolbarContentTintHelper.toolbarContentColor(activity, Color.TRANSPARENT);
+            Drawable drawable = ImageUtil.getTintedVectorDrawable(activity, res, color);
+            Handler uiThread = new Handler(Looper.getMainLooper());
+            uiThread.post(() -> toolbar.getMenu().findItem(R.id.action_toggle_favorite)
+                    .setIcon(drawable)
+                    .setTitle(isFavorite ? getString(R.string.action_remove_from_favorites) : getString(R.string.action_add_to_favorites)));
+        });
+    }
+
+    protected void updateIsFavoriteOrg() {
         if (updateIsFavoriteTask != null) {updateIsFavoriteTask.cancel(false);}
         updateIsFavoriteTask = new AsyncTask<Song, Void, Boolean>() {
             @Override
@@ -324,8 +349,47 @@ public abstract class AbsPlayerFragment
             }
         }.execute(MusicPlayerRemote.getCurrentSong());
     }
-
     protected void updateLyrics() {
+        final Song song = MusicPlayerRemote.getCurrentSong();
+        if (song.equals(Song.EMPTY_SONG)) return;
+        Handler uiThread = new Handler(Looper.getMainLooper());
+        Handler workThread = new Handler();
+        workThread.post(() -> {
+            lyrics = null;
+            uiThread.post(() -> {
+                playerAlbumCoverFragment.setLyrics(null);
+                toolbar.getMenu().removeItem(R.id.action_show_lyrics);
+                    });
+            final Context context = getContext();
+            if (context != null) {
+                String data = MusicUtil.getLyrics(context, song);
+                if (!TextUtils.isEmpty(data)) {
+                    lyrics = Lyrics.parse(song, data);
+                }
+            }
+            uiThread.post(() -> {
+                playerAlbumCoverFragment.setLyrics(lyrics);
+                if (lyrics == null) {
+                    if (toolbar != null) {
+                        toolbar.getMenu().removeItem(R.id.action_show_lyrics);
+                    }
+                } else {
+                    Activity activity = getActivity();
+                    if (toolbar != null && activity != null)
+                        if (toolbar.getMenu().findItem(R.id.action_show_lyrics) == null) {
+                            int color = ToolbarContentTintHelper.toolbarContentColor(activity, Color.TRANSPARENT);
+                            Drawable drawable = ImageUtil.getTintedVectorDrawable(activity, R.drawable.ic_comment_text_outline_white_24dp, color);
+                            toolbar.getMenu()
+                                    .add(Menu.NONE, R.id.action_show_lyrics, Menu.NONE, R.string.action_show_lyrics)
+                                    .setIcon(drawable)
+                                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
+                        }
+                }
+            });
+        });
+    }
+
+    protected void updateLyricsOrg() {
         if (updateLyricsAsyncTask != null) {updateLyricsAsyncTask.cancel(false);}
 
         final Song song = MusicPlayerRemote.getCurrentSong();

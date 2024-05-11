@@ -1,5 +1,8 @@
 package com.poupa.vinylmusicplayer.glide.audiocover;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -47,5 +50,24 @@ public class SongCoverFetcher extends AbsCoverFetcher {
             input = loadCoverFromFolderImage(new File(model.song.data));
         }
         return input;
+    }
+
+    @Nullable
+    public Bitmap loadBitmap() {
+        Bitmap bitmap = loadBitmap(loadCoverFromAudioTags(model.song));
+        if (bitmap == null) {
+            bitmap = loadBitmap(loadCoverFromMediaStore(model.song));
+        }
+        if (bitmap == null) {
+            bitmap = loadBitmap(loadCoverFromFolderImage(new File(model.song.data)));
+        }
+        return bitmap;
+    }
+    @Nullable
+    private Bitmap loadBitmap(InputStream input) {
+        if (input == null) {
+            return null;
+        }
+        return BitmapFactory.decodeStream(input);
     }
 }

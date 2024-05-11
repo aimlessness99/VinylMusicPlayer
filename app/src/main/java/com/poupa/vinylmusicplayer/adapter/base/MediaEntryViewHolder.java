@@ -45,6 +45,9 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
     public final TextView text;
 
     @Nullable
+    public final TextView textExtra;
+
+    @Nullable
     public final View menu;
 
     @Nullable
@@ -69,6 +72,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = binding.titleScrollview;
         text = binding.text;
+        textExtra = binding.textExtra;
         menu = binding.menu;
         separator = binding.separator;
         shortSeparator  = binding.shortSeparator;
@@ -90,6 +94,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = binding.titleScrollview;
         text = binding.text;
+        textExtra = null;
         menu = null;
         separator = null;
         shortSeparator  = null;
@@ -111,6 +116,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = binding.titleScrollview;
         text = binding.text;
+        textExtra = null;
         menu = null;
         separator = null;
         shortSeparator  = null;
@@ -132,6 +138,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = null;
         text = null;
+        textExtra = null;
         menu = null;
         separator = null;
         shortSeparator  = null;
@@ -152,6 +159,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = null;
         text = null;
+        textExtra = null;
         menu = null;
         separator = null;
         shortSeparator  = null;
@@ -173,6 +181,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = binding.titleScrollview;
         text = binding.text;
+        textExtra = null;
         menu = binding.menu;
         separator = binding.separator;
         shortSeparator  = binding.shortSeparator;
@@ -194,6 +203,7 @@ public class MediaEntryViewHolder extends AbstractDraggableSwipeableItemViewHold
         title = binding.title;
         titleScrollview = binding.titleScrollview;
         text = binding.text;
+        textExtra = null;
         menu = binding.menu;
         separator = binding.separator;
         shortSeparator  = binding.shortSeparator;

@@ -107,6 +107,16 @@
                     android:singleLine="true"
                     android:textAppearance="@style/TextAppearance.AppCompat.Body1"
                     android:textColor="?android:textColorSecondary" />
+                <TextView
+                    android:id="@+id/text_extra"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
+                    android:singleLine="true"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                    android:textColor="?android:textColorSecondary"
+                    android:enabled="false"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <com.poupa.vinylmusicplayer.views.IconImageView

@@ -160,6 +160,11 @@ public class SongAdapter
             holder.text.setText(getSongText(song));
         }
 
+        if (holder.textExtra != null) {
+            holder.textExtra.setText(MusicUtil.getSongFileString(song));
+            holder.textExtra.setVisibility(View.VISIBLE);
+        }
+
         PlayingSongDecorationUtil.decorate(this, holder, song, activity);
     }
 

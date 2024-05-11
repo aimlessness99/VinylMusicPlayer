@@ -1,5 +1,6 @@
 package com.poupa.vinylmusicplayer.service;
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.content.BroadcastReceiver;
@@ -11,10 +12,14 @@ import android.content.SharedPreferences;
 import android.database.ContentObserver;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.ColorSpace;
+import android.graphics.drawable.Drawable;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.audiofx.AudioEffect;
+import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,8 +32,13 @@ import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.v4.media.MediaBrowserCompat;
 import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.RatingCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.text.TextUtils;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -36,6 +46,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.util.Predicate;
 import androidx.media.MediaBrowserServiceCompat;
 
+import com.kabouzeid.appthemehelper.util.ToolbarContentTintHelper;
 import com.poupa.vinylmusicplayer.R;
 import com.poupa.vinylmusicplayer.appwidgets.AppWidgetBig;
 import com.poupa.vinylmusicplayer.appwidgets.AppWidgetCard;
@@ -52,6 +63,8 @@ import com.poupa.vinylmusicplayer.misc.queue.StaticPlayingQueue;
 import com.poupa.vinylmusicplayer.model.Album;
 import com.poupa.vinylmusicplayer.model.Playlist;
 import com.poupa.vinylmusicplayer.model.Song;
+import com.poupa.vinylmusicplayer.model.lyrics.AbsSynchronizedLyrics;
+import com.poupa.vinylmusicplayer.model.lyrics.Lyrics;
 import com.poupa.vinylmusicplayer.provider.HistoryStore;
 import com.poupa.vinylmusicplayer.provider.MusicPlaybackQueueStore;
 import com.poupa.vinylmusicplayer.provider.SongPlayCountStore;
@@ -61,12 +74,17 @@ import com.poupa.vinylmusicplayer.service.notification.PlayingNotification;
 import com.poupa.vinylmusicplayer.service.notification.PlayingNotificationImplApi19;
 import com.poupa.vinylmusicplayer.service.notification.PlayingNotificationImplApi24;
 import com.poupa.vinylmusicplayer.service.playback.Playback;
+import com.poupa.vinylmusicplayer.util.AutoCloseAudioFile;
+import com.poupa.vinylmusicplayer.util.ImageUtil;
 import com.poupa.vinylmusicplayer.util.MusicUtil;
 import com.poupa.vinylmusicplayer.util.OopsHandler;
 import com.poupa.vinylmusicplayer.util.PackageValidator;
 import com.poupa.vinylmusicplayer.util.PlaylistsUtil;
 import com.poupa.vinylmusicplayer.util.PreferenceUtil;
+import com.poupa.vinylmusicplayer.util.SAFUtil;
 import com.poupa.vinylmusicplayer.util.SafeToast;
+
+import org.jaudiotagger.audio.AudioHeader;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -290,6 +308,8 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
 
         MediaSessionCallback mMediaSessionCallback = new MediaSessionCallback(this);
         mediaSession = new MediaSessionCompat(this, "VinylMusicPlayer", mediaButtonReceiverComponentName, mediaButtonReceiverPendingIntent);
+        //mediaSession.setFlags();
+        // mediaSession.setRatingType(RatingCompat.RATING_3_STARS);
         mediaSession.setCallback(mMediaSessionCallback);
         mediaSession.setActive(true);
         mediaSession.setMediaButtonReceiver(mediaButtonReceiverPendingIntent);
@@ -436,6 +456,69 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         queueSaveHandler.sendEmptyMessage(QueueSaveHandler.SAVE_QUEUES);
     }
 
+    public int repeatModeFromMediaSession(int repeatMode) {
+        switch (repeatMode) {
+            case PlaybackStateCompat.REPEAT_MODE_ALL:
+                return MusicService.REPEAT_MODE_ALL;
+            case PlaybackStateCompat.REPEAT_MODE_ONE:
+                return MusicService.REPEAT_MODE_THIS;
+            case PlaybackStateCompat.REPEAT_MODE_INVALID:
+            case PlaybackStateCompat.REPEAT_MODE_NONE:
+            default:
+                return MusicService.REPEAT_MODE_NONE;
+        }
+    }
+
+    public int repeatModeToMediaSession(int repeatMode) {
+        switch (repeatMode) {
+            case MusicService.REPEAT_MODE_ALL:
+                return PlaybackStateCompat.REPEAT_MODE_ALL;
+            case MusicService.REPEAT_MODE_THIS:
+                return PlaybackStateCompat.REPEAT_MODE_ONE;
+            case MusicService.REPEAT_MODE_NONE:
+            default:
+                return PlaybackStateCompat.REPEAT_MODE_NONE;
+        }
+    }
+
+    public int shuffleModeFromMediaSession(int shuffleMode) {
+        switch (shuffleMode) {
+            case PlaybackStateCompat.SHUFFLE_MODE_GROUP:
+            case PlaybackStateCompat.SHUFFLE_MODE_ALL:
+                return MusicService.SHUFFLE_MODE_SHUFFLE;
+            case PlaybackStateCompat.SHUFFLE_MODE_NONE:
+            default:
+                return MusicService.SHUFFLE_MODE_NONE;
+        }
+    }
+
+    public int shuffleModeToMediaSession(int shuffleMode) {
+        switch (shuffleMode) {
+            case MusicService.SHUFFLE_MODE_SHUFFLE:
+                return PlaybackStateCompat.SHUFFLE_MODE_ALL;
+            case MusicService.SHUFFLE_MODE_NONE:
+            default:
+                return PlaybackStateCompat.SHUFFLE_MODE_NONE;
+        }
+    }
+    private void updateMediaSessionRepeatMode() {
+        if (mediaSession == null || playingQueue == null) {
+            return;
+        }
+        int mode = repeatModeToMediaSession(playingQueue.getRepeatMode());
+        mediaSession.setRepeatMode(mode);
+        Log.e(TAG,"[DVD] updateMediaSessionRepeatMode: " + mode);
+    }
+
+    private void updateMediaSessionShuffleMode() {
+        if (mediaSession == null || playingQueue == null) {
+            return;
+        }
+        int mode = shuffleModeToMediaSession(playingQueue.getShuffleMode());
+        mediaSession.setShuffleMode(mode);
+        Log.e(TAG,"[DVD] updateMediaSessionRepeatMode: " + mode);
+    }
+
     private void restoreState() {
         final int shuffleMode = PreferenceManager.getDefaultSharedPreferences(this).getInt(SAVED_SHUFFLE_MODE, 0);
         final int repeateMode = PreferenceManager.getDefaultSharedPreferences(this).getInt(SAVED_REPEAT_MODE, 0);
@@ -506,6 +589,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
     public void quit() {
         pause();
 
+        stopUpdateLyrics();
         playingNotification.stop();
         idleNotification.stop();
         crashNotification.stop();
@@ -521,6 +605,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         queueSaveHandlerThread.quitSafely();
 
         synchronized (this) {
+            stopUpdateLyrics();
             playbackHandler.removeCallbacksAndMessages(null);
             playbackHandlerThread.quitSafely();
 
@@ -688,6 +773,8 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         setCustomAction(stateBuilder);
 
         mediaSession.setPlaybackState(stateBuilder.build());
+        updateMediaSessionRepeatMode();
+        updateMediaSessionShuffleMode();
     }
 
     private void setCustomAction(PlaybackStateCompat.Builder stateBuilder) {
@@ -720,7 +807,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
                 .build());
     }
 
-    private void updateMediaSessionMetaData() {
+    private void updateMediaSessionMetaDataOrg() {
         final Song song = getCurrentSong();
 
         if (song.id == Song.EMPTY_SONG.id) {
@@ -755,6 +842,335 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
 
         mediaSession.setMetadata(metaData.build());
    }
+
+    class LyricsMediaMetadata {
+        public MediaMetadataCompat.Builder mBuilder = null;
+        public Song mSong = null;
+        public AbsSynchronizedLyrics mLyrics = null;
+        public AbsSynchronizedLyrics.Line mCurrentline = null;
+
+        public Bitmap mBitmap = null;
+
+        public String bitrates;
+
+        LyricsMediaMetadata(Song song) {
+            synchronized (this) {
+                mBuilder = createMediaSessionMetaData(song);
+                mSong = song;
+
+                loadLyrics();
+            }
+        }
+
+        public Handler mTimer = new Handler();
+
+        public Runnable mLyricsUpdater = new Runnable() {
+            @Override
+            public void run() {
+                synchronized (mTimer) {
+                    mTimer.removeCallbacks(this);
+                    if (mLyrics == null) {
+                        return;
+                    }
+                    int time = 0;
+                    AbsSynchronizedLyrics.Line line = null;
+                    if(playback != null && playback.isPlaying()) {
+                        time = playback.position();
+                        line = mLyrics.getTimeLine(time);
+                        // Log.i(TAG, "[DVD] start updating lyrics from time: " + time);
+
+                    } else {
+                        Log.e(TAG, "[DVD] playback is null, skip update lyrics.");
+                        return;
+                    }
+                    if (line == null) {
+                        Log.e(TAG, "[DVD] current lyrics line is null, stopped.");
+                        return;
+                    }
+                    mCurrentline = line;
+                    updateMediaSessionLyricsMetaData();
+                    line = mLyrics.getNextTimeLine(mCurrentline);
+                    if (line == null) {
+                        Log.i(TAG, "[DVD] stop updating lyrics as can't find next line");
+                        return;
+                    }
+                    int delay = line.time-time + 20;
+                    // Log.i(TAG, "[DVD] will get next line at time: " + line.time + ", delay=" + delay);
+                    // Log.i(TAG, "[DVD] curr line: " + mCurrentline);
+                    // Log.i(TAG, "[DVD] next line: " + line);
+                    mTimer.postDelayed(this, delay);
+                }
+            }
+
+        };
+
+        public void onLyricsLoaded(Song song, Lyrics l) {
+            if (song.id != mSong.id) {
+                Log.e(TAG, "[DVD] lyrics mismatch, song changed from " + song.data  + " to " + mSong.data);
+                return;
+            }
+            if (!(l instanceof AbsSynchronizedLyrics)) {
+                Log.e(TAG, "[DVD] lyrics class mismatch, we got  " + l + " diff from " + AbsSynchronizedLyrics.class.getSimpleName());
+                return;
+            }
+            Log.i(TAG, "[DVD] lyrics is loaded for:" + mSong.data);
+            AbsSynchronizedLyrics synchronizedLyrics = (AbsSynchronizedLyrics) l;
+            mLyrics = synchronizedLyrics;
+            // mTimer.postDelayed(mLyricsUpdater, 0);
+            startUpdateLyrics();
+        }
+
+        public void startUpdateLyrics() {
+            synchronized (mTimer) {
+                mTimer.postDelayed(mLyricsUpdater, 0);
+            }
+        }
+        public void stopUpdateLyrics() {
+            synchronized (mTimer) {
+                mTimer.removeCallbacks(mLyricsUpdater);
+            }
+        }
+
+        public Bitmap createScaledBitmap(Bitmap bm, int maxWidth, int maxHeight) {
+            int w = bm.getWidth();
+            int h = bm.getHeight();
+            if (w == 0 || h == 0 || maxWidth <= 0 || maxHeight <= 0) {
+                return bm.copy(Bitmap.Config.ARGB_8888, true);
+            }
+            if (w <= maxWidth && h <= maxHeight) {
+                return bm.copy(Bitmap.Config.ARGB_8888, true);
+            }
+
+            float scale = Math.max((float)w / maxWidth, (float)h / maxHeight);
+            int newW = (int)(w/scale);
+            int newH = (int)(h/scale);
+            Log.i(TAG, "[DVD] metadata scale bitmap to size: (" + newW + ", " + newH + ") from (" + w + ", " + h + ")");
+            return Bitmap.createScaledBitmap(bm,newW, newH, true);
+        }
+
+        private MediaMetadataCompat.Builder createMediaSessionMetaData(Song song) {
+            if (song.id == Song.EMPTY_SONG.id) {
+                return null;
+            }
+
+            final MediaMetadataCompat.Builder builder = new MediaMetadataCompat.Builder()
+                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, MultiValuesTagUtil.infoStringAsArtists(song.artistNames))
+                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ARTIST, MultiValuesTagUtil.infoStringAsArtists(song.albumArtistNames))
+                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, Album.getTitle(song.albumName))
+                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.getTitle())
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.duration)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_TRACK_NUMBER, getPosition() + 1)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_YEAR, song.year)
+                    .putLong(MediaMetadataCompat.METADATA_KEY_DISC_NUMBER,getPosition() + 1)
+                    .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID,String.valueOf(getPosition() + 1));
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                synchronized (this) {
+                    builder.putLong(MediaMetadataCompat.METADATA_KEY_NUM_TRACKS, playingQueue.size());
+                }
+            }
+
+            // Note: For Android Auto and for Android 13, it is necessary to provide METADATA_KEY_ALBUM_ART
+            //       or similar to the MediaSession to have a hi-res cover image displayed,
+            //       respectively on the Auto's now playing screen and Android 13's now playing notification/lockscreen
+            final SongCoverFetcher fetcher = new SongCoverFetcher(new SongCover(song));
+            Bitmap bitmap = fetcher.loadBitmap();
+            if (bitmap != null) {
+                bitmap = createScaledBitmap(bitmap, 64, 64);
+                ColorSpace cs = null;
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    cs = bitmap.getColorSpace();
+                }
+                Bitmap.Config config = bitmap.getConfig();
+                // bitmap.setConfig(Bitmap.Config.ARGB_8888);
+                Log.i(TAG, "[DVD] metadata bitmap final size: (" + bitmap.getWidth() + ", " +
+                        bitmap.getHeight() + "): color: " + cs +", config: " + config);
+                builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap);
+                // builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, bitmap);
+                // builder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, bitmap);
+                mBitmap = bitmap;
+            } else {
+                Log.e(TAG, "[DVD] failed to load bitmap for song cover");
+            }
+            return builder;
+        }
+
+
+        private static class UpdateLyricsAsyncTask extends AsyncTask<Void, Void, Lyrics> {
+            Context mContext = null;
+            Song mSong = null;
+            Lyrics mLyrics = null;
+            LyricsMediaMetadata mMetaData;
+            UpdateLyricsAsyncTask(Context context, Song song, LyricsMediaMetadata metadata) {
+                mContext = context;
+                mSong = song;
+                mLyrics = null;
+                mMetaData = metadata;
+            }
+            protected void onPreExecute() {
+                super.onPreExecute();
+                mLyrics = null;
+            }
+
+            public void loadSongInfo(Context context, Song song) {
+                try (AutoCloseAudioFile audioFile = SAFUtil.loadReadOnlyAudioFile(context, song)) {
+                    AudioHeader audioHeader = audioFile.get().getAudioHeader();
+                    mMetaData.bitrates = audioHeader.getBitRate() + "kb";
+                } catch (@NonNull Exception | NoSuchMethodError | VerifyError e) {
+                    mMetaData.bitrates = "---kb";
+                }
+            }
+
+            @Override
+            protected Lyrics doInBackground(Void... params) {
+                final Context context = mContext;
+                if (context == null) {
+                    Log.e(TAG, "[DVD] failed in get context to get lyrics.");
+                    return null;
+                }
+                Log.i(TAG, "[DVD] starting to get lyrics for " + mSong.data);
+
+                String data = MusicUtil.getLyrics(context, mSong);
+                if (TextUtils.isEmpty(data)) {
+                    return null;
+                }
+                Lyrics l = Lyrics.parse(mSong, data);
+                // loadSongInfo(mContext, mSong);
+                return l;
+            }
+
+            @Override
+            protected void onPostExecute(Lyrics l) {
+                mLyrics = l;
+                if (mLyrics == null) {
+                    return;
+                }
+                Log.i(TAG, "[DVD] successfully to get lyrics for " + mSong.data);
+                mMetaData.onLyricsLoaded(mSong, mLyrics);
+            }
+
+            @Override
+            protected void onCancelled(Lyrics l) {
+                onPostExecute(null);
+                Log.i(TAG, "[DVD] cancelled to get lyrics.");
+            }
+        };
+
+        private UpdateLyricsAsyncTask mUpdateLyricsAsyncTask = null;
+        private void loadLyrics() {
+            if (mUpdateLyricsAsyncTask != null) {
+                mUpdateLyricsAsyncTask.cancel(false);
+            }
+            if (mSong.id == Song.EMPTY_SONG.id) {
+                return;
+            }
+            mUpdateLyricsAsyncTask = new UpdateLyricsAsyncTask(getBaseContext(), mSong, this);
+            mUpdateLyricsAsyncTask.execute();
+        }
+    }
+
+    private LyricsMediaMetadata mLyricsMetaData = null;
+    private void updateMediaSessionMetaData() {
+        final Song song = getCurrentSong();
+        mLyricsMetaData = new LyricsMediaMetadata(song);
+        if (mLyricsMetaData.mSong.id == Song.EMPTY_SONG.id) {
+            mediaSession.setMetadata(null);
+            return;
+        }
+        mediaSession.setMetadata(mLyricsMetaData.mBuilder.build());
+    }
+
+    private int getTextLengthInEnglish(String str) {
+        int len = 0;
+        for(int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            len += (c >255)? 2:1;
+        }
+        return len;
+    }
+
+    private int lastPosSeconds = 0;
+
+    private void updateMediaSessionLyricsMetaData() {
+        final Song song = getCurrentSong();
+        final AbsSynchronizedLyrics.Line line = mLyricsMetaData.mCurrentline;
+        if (mLyricsMetaData.mSong.id == Song.EMPTY_SONG.id || line == null) {
+            // mediaSession.setMetadata(null);
+            return;
+        }
+//        final MediaMetadataCompat.Builder builder = new MediaMetadataCompat.Builder()
+//                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, MultiValuesTagUtil.infoStringAsArtists(song.artistNames))
+//                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ARTIST, MultiValuesTagUtil.infoStringAsArtists(song.albumArtistNames))
+//                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, Album.getTitle(song.albumName))
+//                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.getTitle())
+//                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.duration)
+//                .putLong(MediaMetadataCompat.METADATA_KEY_TRACK_NUMBER, getPosition() + 1)
+//                .putLong(MediaMetadataCompat.METADATA_KEY_YEAR, song.year);
+        // we use album slot as title. and then use title slot to display lyrics
+        // String[] artists = {song.getTitle(), MultiValuesTagUtil.infoStringAsArtists(song.artistNames)};
+        String artist = MultiValuesTagUtil.infoStringAsArtists(song.artistNames);
+        String artist_and_title = MusicUtil.buildInfoString(artist, song.getTitle());
+        String album = Album.getTitle(song.albumName);
+        String album_and_title = MusicUtil.buildInfoString(album, song.getTitle());
+        String album_and_title_or_lyrics = album_and_title;
+        String lyric_text = line.text;
+        // String extra;//  = album; // MusicUtil.buildInfoString(album, mLyricsMetaData.bitrates);
+        if (line.text.isEmpty()) {
+            lyric_text = ".";
+        }
+        if (getTextLengthInEnglish(lyric_text) > 24) {
+            album = album_and_title_or_lyrics = lyric_text;
+        }
+        if (mLyricsMetaData.mLyrics == null  || mLyricsMetaData.mLyrics.getCount() <= 1) {
+            artist_and_title = artist;
+            album_and_title = album;
+            lyric_text = song.getTitle();
+        }
+        int playSeconds = 0;
+        synchronized (this) {
+            if (playback != null /*&& playback.isPlaying()*/) {
+                playSeconds = playback.position()/1000;
+            }
+        }
+        switch ((playSeconds/10) & 0x3) {
+            case 0:
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album_and_title_or_lyrics);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, lyric_text);
+                break;
+            case 1:
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album_and_title);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, lyric_text);
+                break;
+            case 2:
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist_and_title);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, lyric_text);
+                break;
+            case 3:
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album_and_title_or_lyrics);
+                mLyricsMetaData.mBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, lyric_text);
+                break;
+        }
+        lastPosSeconds = (playSeconds/10) & 0x3;
+
+        Log.e(TAG, "[DVD] update lyrics metadata: " + line + ", pos: " + lastPosSeconds);
+        mediaSession.setMetadata(mLyricsMetaData.mBuilder.build());
+    }
+    void startUpdateLyrics() {
+        if (mLyricsMetaData != null) {
+            Log.e(TAG, "[DVD] start update lyrics from music service command!");
+            mLyricsMetaData.startUpdateLyrics();
+        }
+    }
+    void stopUpdateLyrics() {
+        if (mLyricsMetaData != null) {
+            Log.e(TAG, "[DVD] stop update lyrics from music service command!");
+            mLyricsMetaData.stopUpdateLyrics();
+        }
+    }
 
     public void runOnUiThread(Runnable runnable) {
         uiThreadHandler.post(runnable);
@@ -803,6 +1219,14 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         propagateRepeatChange();
     }
 
+    public void setRepeatModeFromMediaSession(int repeatMode) {
+        int newRepeatMode = repeatModeFromMediaSession(repeatMode);
+        synchronized (this) {
+            playingQueue.setRepeatMode(newRepeatMode);
+        }
+        propagateRepeatChange();
+    }
+
     private void propagateRepeatChange() {
         int repeatMode;
         synchronized (this) {
@@ -845,6 +1269,11 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
             playingQueue.setShuffle(shuffleMode);
         }
         propagateShuffleChange();
+    }
+
+    public void setShuffleModeFromMediaSession(int shuffleMode) {
+        int newShuffleMode = shuffleModeFromMediaSession(shuffleMode);
+        setShuffleMode(newShuffleMode);
     }
 
     public void openQueue(@Nullable final Collection<? extends Song> queue, final int startPosition, final boolean startPlaying, final int shuffleMode) {
@@ -971,6 +1400,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         synchronized (this) {
             if (playbackHandlerThread.isAlive()) {
                 playbackHandler.removeMessages(PLAY_SONG);
+                stopUpdateLyrics();
                 playbackHandler.obtainMessage(PLAY_SONG, position, 0).sendToTarget();
             }
         }
@@ -1017,6 +1447,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
                         playSongAt(getPosition(), false);
                     } else {
                         playback.start();
+                        startUpdateLyrics();
                         if (!becomingNoisyReceiverRegistered) {
                             registerReceiver(becomingNoisyReceiver, becomingNoisyReceiverIntentFilter);
                             becomingNoisyReceiverRegistered = true;
@@ -1120,6 +1551,7 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
         synchronized (this) {
             if (playback != null) {
                 playback.seek(millis);
+                startUpdateLyrics();
             }
         }
         throttledSeekHandler.notifySeek();
@@ -1171,7 +1603,10 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
             | PlaybackStateCompat.ACTION_SKIP_TO_NEXT
             | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
             | PlaybackStateCompat.ACTION_STOP
-            | PlaybackStateCompat.ACTION_SEEK_TO;
+            | PlaybackStateCompat.ACTION_SEEK_TO
+            | PlaybackStateCompat.ACTION_SET_REPEAT_MODE
+            | PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE
+            /*| PlaybackStateCompat.ACTION_SET_RATING*/;
 
     private void handleChangeInternal(@NonNull final String what) {
         switch (what) {
@@ -1217,6 +1652,11 @@ public class MusicService extends MediaBrowserServiceCompat implements SharedPre
                     updateNotification();
                 }
                 break;
+            case REPEAT_MODE_CHANGED:
+                updateMediaSessionRepeatMode();
+                break;
+            case SHUFFLE_MODE_CHANGED:
+                updateMediaSessionShuffleMode();
         }
     }
 
